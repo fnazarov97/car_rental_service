@@ -1,125 +1,80 @@
 package postgres
 
 import (
-	"car_rental/genprotos/brand_service"
+	"car_rental/genprotos/brand"
 	"database/sql"
 	"errors"
 )
 
 // AddBrand ...
-func (p Postgres) AddBrand(id string, req *brand_service.CreateBrandReq) (res *brand_service.CreateBrandRes, err error) {
-	req.ID = id
-	_, err = p.DB.Exec(`Insert into author(id, fullname, created_at) 
-							VALUES($1,$2,now())`, req.ID, req.Fullname)
+func (p Postgres) CreateBrand(id string, req *brand.CreateBrandRequest) (res *brand.Brand, err error) {
+
+	_, err = p.DB.Exec(`Insert into "brand"("id", "name", "discription", "year", "created_at") 
+							VALUES($1, $2, $3, $4, now())`, id, req.Name, req.Discription, req.Year)
 	if err != nil {
-		return res, err
+		return nil, err
 	}
-	res = &author.CreateBrandRes{}
+
+	res, err = p.GetBrandByID(&brand.GetBrandByIDRequest{BrandId: id})
+	if err != nil {
+		return nil, errors.New("create error")
+	}
 	return res, nil
 }
 
 // GetBrandByID ...
-func (p Postgres) GetBrandByID(req *brand_service.Id) (*brand_service.GetBrandByIdRes, error) {
-	result := &author.GetBrandByIdRes{
-		Articles: make([]*brand_service.Article, 0),
-	}
+func (p Postgres) GetBrandByID(req *brand.GetBrandByIDRequest) (*brand.Brand, error) {
+	result := &brand.Brand{}
 	var (
 		updated_at sql.NullString
 		deleted_at sql.NullString
 	)
-	row := p.DB.QueryRow("SELECT id, created_at, updated_at, deleted_at, fullname FROM author WHERE id=$1", req.Id)
-	err := row.Scan(&result.Id, &result.CreatedAt, &updated_at, &deleted_at, &result.Fullname)
+	row := p.DB.QueryRow(`SELECT "id", "name", "discription", "year", "created_at", "updated_at", "deleted_at" FROM "brand" WHERE id=$1`, req.BrandId)
+	err := row.Scan(&result.BrandId, &result.Name, &result.Discription, &result.Year, &result.CreatedAt, &updated_at, &deleted_at)
 	if updated_at.Valid {
 		result.UpdatedAt = updated_at.String
 	}
-	if deleted_at.Valid {
-		result.DeletedAt = deleted_at.String
+	if !deleted_at.Valid {
+		return nil, errors.New("brand not found")
 	}
 	if err != nil {
-		return result, err
+		return nil, err
 	}
-	ars, err := p.GetArticlesByBrandID(req)
-	result.Articles = ars.Articles
-	if err != nil {
-		return result, err
-	}
+
 	return result, nil
 }
 
-// GetArticlesByBrandID ...
-func (p Postgres) GetArticlesByBrandID(req *brand_service.Id) (*brand_service.GetArticles, error) {
-	resp := &author.GetArticles{
-		Articles: make([]*brand_service.Article, 0),
-	}
-	rows, err := p.DB.Queryx(`SELECT 
-									 id, 
-									 title, 
-									 body, 
-									 author_id, 
-									 created_at,
-									 updated_at,
-									 deleted_at
-							FROM article
-							WHERE author_id = $1 `, req.Id)
-	if err != nil {
-		return resp, err
-	}
-	for rows.Next() {
-		var (
-			update_at  sql.NullString
-			deleted_at sql.NullString
-		)
-		row := author.Article{
-			Content: &author.Post{},
-		}
-		err := rows.Scan(&row.Id, &row.Content.Title, &row.Content.Body,
-			&row.BrandId, &row.CreatedAt, &update_at, &deleted_at)
-		if err != nil {
-			return resp, err
-		}
-		if update_at.Valid {
-			row.UpdatedAt = update_at.String
-		}
-		if deleted_at.Valid {
-			row.DeletedAt = deleted_at.String
-		}
-		resp.Articles = append(resp.Articles, &row)
-	}
-	return resp, nil
-}
-
 // GetBrandList ...
-func (p Postgres) GetBrandList(req *brand_service.GetBrandListReq) (*brand_service.GetBrands, error) {
-	resp := &author.GetBrands{
-		Brands: make([]*brand_service.Brand, 0),
+func (p Postgres) GetBrandList(req *brand.GetBrandListRequest) (*brand.GetBrandListResponse, error) {
+	resp := &brand.GetBrandListResponse{
+		Brands: []*brand.Brand{},
 	}
 	rows, err := p.DB.Queryx(`SELECT
-	id,
-	fullname,
-	created_at,
-	updated_at
-	FROM author WHERE deleted_at IS NULL AND (fullname ILIKE '%' || $1 || '%')
+	"id", "name", "discription", "year", "created_at", "updated_at"
+	FROM "brand" WHERE "deleted_at" IS NULL AND ("name" || "discription" ILIKE '%' || $1 || '%')
 	LIMIT $2
 	OFFSET $3
 	`, req.Search, int(req.Limit), int(req.Offset))
 	if err != nil {
-		return resp, err
+		return nil, err
 	}
 
 	for rows.Next() {
 		var (
-			a         author.Brand
+			a         brand.Brand
 			update_at sql.NullString
 		)
 
 		err := rows.Scan(
-			&a.Id,
-			&a.Fullname,
+			&a.BrandId,
+			&a.Name,
+			&a.Discription,
+			&a.Year,
 			&a.CreatedAt,
 			&update_at,
 		)
 		if err != nil {
-			return resp, err
+			return nil, err
 		}
 		if update_at.Valid {
 			a.UpdatedAt = update_at.String
@@ -131,10 +86,16 @@ func (p Postgres) GetBrandList(req *brand_service.GetBrandListReq) (*brand_servi
 }
 
 // UpdateBrand ...
-func (p Postgres) UpdateBrand(req *brand_service.UpdateBrandReq) error {
-	res, err := p.DB.NamedExec("UPDATE author  SET fullname=:f, updated_at=now() WHERE deleted_at IS NULL AND id=:id", map[string]interface{}{
-		"id": req.Id,
-		"f":  req.Fullname,
+func (p Postgres) UpdateBrand(id string, req *brand.UpdateBrandRequest) error {
+	res, err := p.DB.NamedExec(`
+	UPDATE 
+		"brand"  
+	SET 
+		"name"=:n, "discription"=:d, "year"=:y updated_at=now() WHERE deleted_at IS NULL AND id=:id`, map[string]interface{}{
+		"id": id,
+		"n":  req.Name,
+		"d":  req.Discription,
+		"y":  req.Year,
 	})
 	if err != nil {
 		return err
@@ -148,12 +109,12 @@ func (p Postgres) UpdateBrand(req *brand_service.UpdateBrandReq) error {
 	if n > 0 {
 		return nil
 	}
-	return errors.New("author not found")
+	return errors.New("brand not found")
 }
 
 // DeleteBrand ...
-func (p Postgres) DeleteBrand(req *brand_service.Id) error {
-	res, err := p.DB.Exec("UPDATE author  SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL", req.Id)
+func (p Postgres) DeleteBrand(req *brand.DeleteBrandRequest) error {
+	res, err := p.DB.Exec(`UPDATE "brand"  SET deleted_at=now() WHERE "id"=$1 AND "deleted_at" IS NULL`, req.BrandId)
 	if err != nil {
 		return err
 	}
@@ -167,5 +128,5 @@ func (p Postgres) DeleteBrand(req *brand_service.Id) error {
 		return nil
 	}
 
-	return errors.New("author had been deleted already")
+	return errors.New("brand had been deleted already")
 }

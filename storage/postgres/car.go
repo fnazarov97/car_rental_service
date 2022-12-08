@@ -1,64 +1,67 @@
 package postgres
 
 import (
-	"car_rental/genprotos/article"
-	"car_rental/genprotos/author"
+	"car_rental/genprotos/brand"
+	"car_rental/genprotos/car"
 	"errors"
 	"time"
 )
 
-// AddArticle ...
-func (p Postgres) AddArticle(id string, req *article.AddArticleReq) error {
-	Id := &author.Id{
-		Id: req.AuthorId,
+// CreateCar ...
+func (p Postgres) CreateCar(id string, req *car.CreateCarRequest) error {
+	Id := &brand.GetBrandByIDRequest{
+		BrandId: req.BrandId,
 	}
-	_, err := p.GetAuthorByID(Id)
+	_, err := p.GetBrandByID(Id)
 	if err != nil {
-		return err
+		return errors.New("brand not found to create car")
 	}
 
-	if req.Content == nil {
-		req.Content = &article.AddArticleReq_Post{}
-	}
-	_, err = p.DB.Exec(`Insert into article(id, title, body, author_id, created_at) 
-						 VALUES($1, $2, $3, $4, now())
-						`, id, req.Content.Title, req.Content.Body, req.AuthorId)
+	_, err = p.DB.Exec(`
+	INSERT INTO
+	 "car"("id", "model", "color", "year", "mileage", "brand_id", created_at) 
+	VALUES($1, $2, $3, $4, $5, $6, now())
+	`, id, req.Model, req.Color, req.Year, req.Mileage, req.BrandId)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-// GetArticleByID ...
-func (p Postgres) GetArticleByID(id string) (*article.GetArticleByIdRes, error) {
-	res := &article.GetArticleByIdRes{
-		Content: &article.GetArticleByIdRes_Post{},
-		Authori: &article.GetArticleByIdRes_Author{},
+// GetCarByID ...
+func (p Postgres) GetCarByID(id string) (*car.GetCarByIDResponse, error) {
+	res := &car.GetCarByIDResponse{
+		Brand: &car.GetCarByIDResponse_Brand{},
 	}
 	var deletedAt *time.Time
-	var updatedAt, authorUpdatedAt *string
+	var updatedAt, brandUpdatedAt *string
 	err := p.DB.QueryRow(`SELECT 
-		ar.id,
-		ar.title,
-		ar.body,
-		ar.created_at,
-		ar.updated_at,
-		ar.deleted_at,
-		au.id,
-		au.fullname,
-		au.created_at,
-		au.updated_at
-    FROM article AS ar JOIN author AS au ON ar.author_id = au.id WHERE ar.id = $1`, id).Scan(
-		&res.Id,
-		&res.Content.Title,
-		&res.Content.Body,
+		c.id,
+		c.model,
+		c.color,
+		c.year,
+		c.mileage,
+		c.created_at,
+		c.updated_at,
+		c.deleted_at,
+		b.id,
+		b.name,
+		b.discription,
+		b.created_at,
+		b.updated_at
+    FROM car AS c JOIN brand AS b ON c.brand_id = b.id WHERE c.id = $1`, id).Scan(
+		&res.CarId,
+		&res.Model,
+		&res.Color,
+		&res.Year,
+		&res.Mileage,
 		&res.CreatedAt,
 		&updatedAt,
-		&deletedAt,
-		&res.Authori.Id,
-		&res.Authori.Fullname,
-		&res.Authori.CreatedAt,
-		&authorUpdatedAt,
+		&res.Brand.BrandId,
+		&res.Brand.Name,
+		&res.Brand.Discription,
+		&res.Brand.CreatedAt,
+		&brandUpdatedAt,
 	)
 	if err != nil {
 		return res, err
@@ -68,31 +71,28 @@ func (p Postgres) GetArticleByID(id string) (*article.GetArticleByIdRes, error) 
 		res.UpdatedAt = *updatedAt
 	}
 
-	if authorUpdatedAt != nil {
-		res.Authori.UpdatedAt = *authorUpdatedAt
+	if brandUpdatedAt != nil {
+		res.Brand.UpdatedAt = *brandUpdatedAt
 	}
 
 	if deletedAt != nil {
-		return res, errors.New("article not found")
+		return res, errors.New("car not found")
 	}
 
 	return res, err
 }
 
-// GetArticleList ...
-func (p Postgres) GetArticleList(offset, limit int, search string) (*article.GetArticleListRes, error) {
-	resp := &article.GetArticleListRes{
-		Articles: make([]*article.AddArticleRes, 0),
+// GetCarList ...
+func (p Postgres) GetCarList(offset, limit int, search string) (*car.GetCarListResponse, error) {
+	resp := &car.GetCarListResponse{
+		Cars: make([]*car.Car, 0),
 	}
 
-	rows, err := p.DB.Queryx(`SELECT
-	id,
-	title,
-	body,
-	author_id,
-	created_at,
-	updated_at
-	FROM article WHERE deleted_at IS NULL AND ((title ILIKE '%' || $1 || '%') OR (body ILIKE '%' || $1 || '%'))
+	rows, err := p.DB.Queryx(`
+	SELECT
+		"id", "model", "color", "year", "mileage", "brand_id", "created_at", "updated_at"
+	FROM 
+		"car" WHERE deleted_at IS NULL AND (model ILIKE '%' || $1 || '%')
 	LIMIT $2
 	OFFSET $3
 	`, search, limit, offset)
@@ -101,43 +101,41 @@ func (p Postgres) GetArticleList(offset, limit int, search string) (*article.Get
 	}
 
 	for rows.Next() {
-		a := &article.AddArticleRes{
-			Content: &article.AddArticleRes_Post{},
-		}
+		a := &car.Car{}
 
 		var updatedAt *string
 
 		err := rows.Scan(
-			&a.Id,
-			&a.Content.Title,
-			&a.Content.Body,
-			&a.AuthorId,
-			&a.CreatedAt,
-			&updatedAt,
+			&a.CarId, &a.Model, &a.Color, &a.Year, &a.Mileage, &a.BrandId, &a.CreatedAt, &updatedAt,
 		)
 		if err != nil {
-			return resp, err
+			return nil, err
 		}
 
 		if updatedAt != nil {
 			a.UpdatedAt = *updatedAt
 		}
 
-		resp.Articles = append(resp.Articles, a)
+		resp.Cars = append(resp.Cars, a)
 	}
 
 	return resp, err
 }
 
-// UpdateArticle ...
-func (p Postgres) UpdateArticle(entity *article.UpdateArticleReq) error {
-	if entity.Content == nil {
-		entity.Content = &article.UpdateArticleReq_Post{}
-	}
-	res, err := p.DB.NamedExec("UPDATE article  SET title=:t, body=:b, updated_at=now() WHERE deleted_at IS NULL AND id=:id", map[string]interface{}{
-		"id": entity.Id,
-		"t":  entity.Content.Title,
-		"b":  entity.Content.Body,
+// UpdateCar ...
+func (p Postgres) UpdateCar(id string, entity *car.UpdateCarRequest) error {
+
+	res, err := p.DB.NamedExec(`
+	UPDATE 
+		"car"  
+	SET 
+		"model"=:mo, "color"=:c, "year"=:y, "mileage"=:mi, "brand_id"=:b, updated_at=now() WHERE deleted_at IS NULL AND id=:id`, map[string]interface{}{
+		"id": id,
+		"mo": entity.Model,
+		"c":  entity.Color,
+		"y":  entity.Year,
+		"mi": entity.Mileage,
+		"b":  entity.BrandId,
 	})
 	if err != nil {
 		return err
@@ -152,12 +150,12 @@ func (p Postgres) UpdateArticle(entity *article.UpdateArticleReq) error {
 		return nil
 	}
 
-	return errors.New("article not found")
+	return errors.New("car not found")
 }
 
-// DeleteArticle ...
-func (p Postgres) DeleteArticle(id string) error {
-	res, err := p.DB.Exec("UPDATE article SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL", id)
+// DeleteCar ...
+func (p Postgres) DeleteCar(id string) error {
+	res, err := p.DB.Exec("UPDATE car SET deleted_at=now() WHERE id=$1 AND deleted_at IS NULL", id)
 	if err != nil {
 		return err
 	}
@@ -171,5 +169,5 @@ func (p Postgres) DeleteArticle(id string) error {
 		return nil
 	}
 
-	return errors.New("article not found")
+	return errors.New("car not found")
 }
