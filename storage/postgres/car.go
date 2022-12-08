@@ -36,19 +36,18 @@ func (p Postgres) GetCarByID(id string) (*car.GetCarByIDResponse, error) {
 	var deletedAt *time.Time
 	var updatedAt, brandUpdatedAt *string
 	err := p.DB.QueryRow(`SELECT 
-		c.id,
-		c.model,
-		c.color,
-		c.year,
-		c.mileage,
-		c.created_at,
-		c.updated_at,
-		c.deleted_at,
-		b.id,
-		b.name,
-		b.discription,
-		b.created_at,
-		b.updated_at
+	c.id,
+	c.model,
+	c.color,
+	c.year,
+	c.mileage,
+	c.created_at,
+	c.updated_at,
+	b.id,
+	b.name,
+	b.discription,
+	b.created_at,
+	b.updated_at
     FROM car AS c JOIN brand AS b ON c.brand_id = b.id WHERE c.id = $1`, id).Scan(
 		&res.CarId,
 		&res.Model,

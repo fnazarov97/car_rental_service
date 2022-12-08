@@ -9,15 +9,17 @@ import (
 // AddBrand ...
 func (p Postgres) CreateBrand(id string, req *brand.CreateBrandRequest) (res *brand.Brand, err error) {
 
-	_, err = p.DB.Exec(`Insert into "brand"("id", "name", "discription", "year", "created_at") 
+	_, err = p.DB.Exec(`Insert into brand("id", "name", "discription", "year", "created_at") 
 							VALUES($1, $2, $3, $4, now())`, id, req.Name, req.Discription, req.Year)
 	if err != nil {
-		return nil, err
-	}
-
-	res, err = p.GetBrandByID(&brand.GetBrandByIDRequest{BrandId: id})
-	if err != nil {
 		return nil, errors.New("create error")
+	}
+	Id := &brand.GetBrandByIDRequest{
+		BrandId: id,
+	}
+	res, err = p.GetBrandByID(Id)
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
 }
@@ -29,12 +31,12 @@ func (p Postgres) GetBrandByID(req *brand.GetBrandByIDRequest) (*brand.Brand, er
 		updated_at sql.NullString
 		deleted_at sql.NullString
 	)
-	row := p.DB.QueryRow(`SELECT "id", "name", "discription", "year", "created_at", "updated_at", "deleted_at" FROM "brand" WHERE id=$1`, req.BrandId)
+	row := p.DB.QueryRow(`SELECT id, name, discription, year, created_at, updated_at, deleted_at FROM brand WHERE id = $1`, req.BrandId)
 	err := row.Scan(&result.BrandId, &result.Name, &result.Discription, &result.Year, &result.CreatedAt, &updated_at, &deleted_at)
 	if updated_at.Valid {
 		result.UpdatedAt = updated_at.String
 	}
-	if !deleted_at.Valid {
+	if deleted_at.Valid {
 		return nil, errors.New("brand not found")
 	}
 	if err != nil {
@@ -91,7 +93,7 @@ func (p Postgres) UpdateBrand(id string, req *brand.UpdateBrandRequest) error {
 	UPDATE 
 		"brand"  
 	SET 
-		"name"=:n, "discription"=:d, "year"=:y updated_at=now() WHERE deleted_at IS NULL AND id=:id`, map[string]interface{}{
+		"name"=:n, "discription"=:d, "year"=:y, "updated_at"=now() WHERE deleted_at IS NULL AND id=:id`, map[string]interface{}{
 		"id": id,
 		"n":  req.Name,
 		"d":  req.Discription,
