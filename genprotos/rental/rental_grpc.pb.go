@@ -27,6 +27,7 @@ type RentalServiceClient interface {
 	DeleteRental(ctx context.Context, in *DeleteRentalRequest, opts ...grpc.CallOption) (*Rental, error)
 	GetRentalByID(ctx context.Context, in *GetRentalByIDRequest, opts ...grpc.CallOption) (*GetRentalByIDResponse, error)
 	GetRentalList(ctx context.Context, in *GetRentalListRequest, opts ...grpc.CallOption) (*GetRentalListResponse, error)
+	GetRentalsByUserId(ctx context.Context, in *GetRentalsByUserIdRequest, opts ...grpc.CallOption) (*GetRentalsByUserIdResponse, error)
 }
 
 type rentalServiceClient struct {
@@ -82,6 +83,15 @@ func (c *rentalServiceClient) GetRentalList(ctx context.Context, in *GetRentalLi
 	return out, nil
 }
 
+func (c *rentalServiceClient) GetRentalsByUserId(ctx context.Context, in *GetRentalsByUserIdRequest, opts ...grpc.CallOption) (*GetRentalsByUserIdResponse, error) {
+	out := new(GetRentalsByUserIdResponse)
+	err := c.cc.Invoke(ctx, "/genproto.RentalService/GetRentalsByUserId", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RentalServiceServer is the server API for RentalService service.
 // All implementations must embed UnimplementedRentalServiceServer
 // for forward compatibility
@@ -91,6 +101,7 @@ type RentalServiceServer interface {
 	DeleteRental(context.Context, *DeleteRentalRequest) (*Rental, error)
 	GetRentalByID(context.Context, *GetRentalByIDRequest) (*GetRentalByIDResponse, error)
 	GetRentalList(context.Context, *GetRentalListRequest) (*GetRentalListResponse, error)
+	GetRentalsByUserId(context.Context, *GetRentalsByUserIdRequest) (*GetRentalsByUserIdResponse, error)
 	mustEmbedUnimplementedRentalServiceServer()
 }
 
@@ -112,6 +123,9 @@ func (UnimplementedRentalServiceServer) GetRentalByID(context.Context, *GetRenta
 }
 func (UnimplementedRentalServiceServer) GetRentalList(context.Context, *GetRentalListRequest) (*GetRentalListResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRentalList not implemented")
+}
+func (UnimplementedRentalServiceServer) GetRentalsByUserId(context.Context, *GetRentalsByUserIdRequest) (*GetRentalsByUserIdResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetRentalsByUserId not implemented")
 }
 func (UnimplementedRentalServiceServer) mustEmbedUnimplementedRentalServiceServer() {}
 
@@ -216,6 +230,24 @@ func _RentalService_GetRentalList_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RentalService_GetRentalsByUserId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRentalsByUserIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RentalServiceServer).GetRentalsByUserId(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/genproto.RentalService/GetRentalsByUserId",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RentalServiceServer).GetRentalsByUserId(ctx, req.(*GetRentalsByUserIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RentalService_ServiceDesc is the grpc.ServiceDesc for RentalService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -242,6 +274,10 @@ var RentalService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetRentalList",
 			Handler:    _RentalService_GetRentalList_Handler,
+		},
+		{
+			MethodName: "GetRentalsByUserId",
+			Handler:    _RentalService_GetRentalsByUserId_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
